@@ -3,27 +3,36 @@ import requests
 from bs4 import BeautifulSoup
 import os
 import random
-import sqlite3
+import psycopg2
 
 app = Flask(__name__)
 
-DB_FILE = "keys.db"
+# Render ke environment variable se Neon Database URL lega
+DATABASE_URL = os.environ.get("DATABASE_URL")
 
-# Database Initialize Function
+def get_db_connection():
+    return psycopg2.connect(DATABASE_URL, sslmode='require')
+
+# Database Initialize Function for PostgreSQL
 def init_db():
-    conn = sqlite3.connect(DB_FILE)
-    cursor = conn.cursor()
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS api_keys (
-            key TEXT PRIMARY KEY,
-            tier TEXT,
-            requests_left INTEGER
-        )
-    ''')
-    cursor.execute("INSERT OR IGNORE INTO api_keys (key, tier, requests_left) VALUES ('rahul748', 'free', 10)")
-    cursor.execute("INSERT OR IGNORE INTO api_keys (key, tier, requests_left) VALUES ('rahul999', 'paid', 999999)")
-    conn.commit()
-    conn.close()
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS api_keys (
+                key TEXT PRIMARY KEY,
+                tier TEXT,
+                requests_left INTEGER
+            )
+        ''')
+        # Default keys insert karein (PostgreSQL me ON CONFLICT use hota hai)
+        cursor.execute("INSERT INTO api_keys (key, tier, requests_left) VALUES (%s, %s, %s) ON CONFLICT (key) DO NOTHING", ('rahul748', 'free', 10))
+        cursor.execute("INSERT INTO api_keys (key, tier, requests_left) VALUES (%s, %s, %s) ON CONFLICT (key) DO NOTHING", ('rahul999', 'paid', 999999))
+        conn.commit()
+        cursor.close()
+        conn.close()
+    except Exception as e:
+        print(f"DB Init Error: {e}")
 
 init_db()
 
@@ -110,10 +119,11 @@ def home():
 
 @app.route('/adminrahulop')
 def admin_panel():
-    conn = sqlite3.connect(DB_FILE)
+    conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute("SELECT key, tier, requests_left FROM api_keys")
     keys = cursor.fetchall()
+    cursor.close()
     conn.close()
     return render_template_string(ADMIN_HTML, keys=keys)
 
@@ -123,10 +133,11 @@ def admin_create():
     tier = request.form.get('tier')
     if key:
         limit = 10 if tier == 'free' else 999999
-        conn = sqlite3.connect(DB_FILE)
+        conn = get_db_connection()
         cursor = conn.cursor()
-        cursor.execute("INSERT OR REPLACE INTO api_keys (key, tier, requests_left) VALUES (?, ?, ?)", (key, tier, limit))
+        cursor.execute("INSERT INTO api_keys (key, tier, requests_left) VALUES (%s, %s, %s) ON CONFLICT (key) DO UPDATE SET tier = EXCLUDED.tier, requests_left = EXCLUDED.requests_left", (key, tier, limit))
         conn.commit()
+        cursor.close()
         conn.close()
     return redirect(url_for('admin_panel'))
 
@@ -134,10 +145,11 @@ def admin_create():
 def admin_revoke():
     key = request.form.get('key')
     if key:
-        conn = sqlite3.connect(DB_FILE)
+        conn = get_db_connection()
         cursor = conn.cursor()
-        cursor.execute("DELETE FROM api_keys WHERE key = ?", (key,))
+        cursor.execute("DELETE FROM api_keys WHERE key = %s", (key,))
         conn.commit()
+        cursor.close()
         conn.close()
     return redirect(url_for('admin_panel'))
 
@@ -145,12 +157,13 @@ def admin_revoke():
 def number_info(key):
     phone_number = request.args.get('number')
     
-    conn = sqlite3.connect(DB_FILE)
+    conn = get_db_connection()
     cursor = conn.cursor()
-    cursor.execute("SELECT tier, requests_left FROM api_keys WHERE key = ?", (key,))
+    cursor.execute("SELECT tier, requests_left FROM api_keys WHERE key = %s", (key,))
     row = cursor.fetchone()
     
     if not row:
+        cursor.close()
         conn.close()
         return jsonify({
             "status": False,
@@ -161,15 +174,17 @@ def number_info(key):
     
     if tier == "free":
         if requests_left <= 0:
+            cursor.close()
             conn.close()
             return jsonify({
                 "status": False,
                 "error": "Free limit exhausted! Buy unlimited key from @Mr_Rahul_Dev"
             }), 429
         requests_left -= 1
-        cursor.execute("UPDATE api_keys SET requests_left = ? WHERE key = ?", (requests_left, key))
+        cursor.execute("UPDATE api_keys SET requests_left = %s WHERE key = %s", (requests_left, key))
         conn.commit()
     
+    cursor.close()
     conn.close()
 
     if not phone_number:
