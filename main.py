@@ -76,7 +76,6 @@ ADMIN_HTML = """
 
     <script>
         function generateKey() {
-            // Random number 10 to 999
             const randNum = Math.floor(Math.random() * 990) + 10;
             const key = "rahul" + randNum;
             document.getElementById('generated_key').value = key;
@@ -94,12 +93,10 @@ def home():
         "developer": "@Mr_Rahul_Dev"
     })
 
-# Admin Panel Route
 @app.route('/adminrahulop')
 def admin_panel():
     return render_template_string(ADMIN_HTML, keys=API_KEYS_DB)
 
-# Admin Key Creation Route
 @app.route('/admin/create', methods=['POST'])
 def admin_create():
     key = request.form.get('key')
@@ -109,7 +106,6 @@ def admin_create():
         API_KEYS_DB[key] = {"tier": tier, "requests_left": limit}
     return redirect(url_for('admin_panel'))
 
-# Admin Key Revoke Route
 @app.route('/admin/revoke', methods=['POST'])
 def admin_revoke():
     key = request.form.get('key')
@@ -117,7 +113,6 @@ def admin_revoke():
         del API_KEYS_DB[key]
     return redirect(url_for('admin_panel'))
 
-# Main Lookup API Endpoint
 @app.route('/api/<key>/info', methods=['GET'])
 def number_info(key):
     phone_number = request.args.get('number')
@@ -202,7 +197,7 @@ def number_info(key):
             data_content = scraped_data
 
         response_payload = {
-            "status": true,
+            "status": True,  # Yahan pehle 'true' tha, ab 'True' kar diya hai
             "query_number": phone_number,
             "data": data_content,
             "developer_info": {
