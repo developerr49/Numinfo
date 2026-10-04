@@ -10,7 +10,6 @@ app = Flask(__name__)
 DB_FILE = "keys.db"
 
 # Database Initialize Function
-D:\AI\Workspace\projects\github.com\developerr49\Numinfo\main.py
 def init_db():
     conn = sqlite3.connect(DB_FILE)
     cursor = conn.cursor()
@@ -21,7 +20,6 @@ def init_db():
             requests_left INTEGER
         )
     ''')
-    # Default keys insert karein agar pehle se na ho
     cursor.execute("INSERT OR IGNORE INTO api_keys (key, tier, requests_left) VALUES ('rahul748', 'free', 10)")
     cursor.execute("INSERT OR IGNORE INTO api_keys (key, tier, requests_left) VALUES ('rahul999', 'paid', 999999)")
     conn.commit()
